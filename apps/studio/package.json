@@ -1,0 +1,29 @@
+{
+  "name": "@armin-eslami/gatherform-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@armin-eslami/gatherform-core": "workspace:^",
+    "@armin-eslami/gatherform-react": "workspace:^",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "three": "0.187.0",
+    "onnxruntime-web": "1.31.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/armineslami/gatherform.git",
+    "directory": "apps/studio"
+  },
+  "homepage": "https://github.com/armineslami/gatherform#readme",
+  "bugs": {
+    "url": "https://github.com/armineslami/gatherform/issues"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "gatherform-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @armin-eslami/gatherform-studio dev",
+    "build": "pnpm -r build",
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm --filter @armin-eslami/gatherform-core build && node --test tests/*.test.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "pack:player": "pnpm --filter @armin-eslami/gatherform-core pack --pack-destination release && pnpm --filter @armin-eslami/gatherform-react pack --pack-destination release",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.187.0",
+    "vite": "8.3.8",
+    "prettier": "3.8.4"
+  },
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/armineslami/gatherform.git"
+  },
+  "homepage": "https://github.com/armineslami/gatherform#readme",
+  "bugs": {
+    "url": "https://github.com/armineslami/gatherform/issues"
+  }
+}

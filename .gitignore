@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tgz
+*.gatherform
+.DS_Store
+release/
+.idea
+.junie
+
+# Keep local credentials and generated diagnostics out of source control.
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo

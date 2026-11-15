@@ -1,0 +1,51 @@
+{
+  "name": "@armin-eslami/gatherform-core",
+  "version": "0.1.0",
+  "type": "module",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\" && tsc -p tsconfig.json",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "three": ">=0.185.0 <0.188.0"
+  },
+  "devDependencies": {
+    "three": "0.187.0"
+  },
+  "description": "Interactive image point clouds for the web.",
+  "sideEffects": false,
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "keywords": [
+    "point-cloud",
+    "particles",
+    "webgl",
+    "gatherform"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/armineslami/gatherform.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/armineslami/gatherform#readme",
+  "bugs": {
+    "url": "https://github.com/armineslami/gatherform/issues"
+  }
+}

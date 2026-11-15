@@ -1,0 +1,56 @@
+{
+  "name": "@armin-eslami/gatherform-react",
+  "version": "0.1.0",
+  "type": "module",
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@armin-eslami/gatherform-core": "workspace:^"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0 || ^19.0.0",
+    "three": ">=0.185.0 <0.188.0"
+  },
+  "devDependencies": {
+    "react": "19.3.1"
+  },
+  "description": "React player for Gatherform interactive scenes.",
+  "sideEffects": false,
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "keywords": [
+    "point-cloud",
+    "particles",
+    "webgl",
+    "gatherform",
+    "react"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/armineslami/gatherform.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/armineslami/gatherform#readme",
+  "bugs": {
+    "url": "https://github.com/armineslami/gatherform/issues"
+  }
+}
