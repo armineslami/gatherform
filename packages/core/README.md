@@ -1,7 +1,7 @@
 # @armin-eslami/gatherform-core
 
 A Three.js player and versioned scene codec for Gatherform's interactive image
-point clouds. Install with `pnpm add @armin-eslami/gatherform-core` after registry publication. Image decoding and AI processing belong to the separate Studio app.
+point clouds. Install with `pnpm add @armin-eslami/gatherform-core`. Image decoding and AI processing belong to the separate Studio app.
 
 ```ts
 import { GatherformPlayer, loadScene } from "@armin-eslami/gatherform-core";

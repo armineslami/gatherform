@@ -68,9 +68,10 @@ installs core and its tested Three.js dependency. React remains a peer dependenc
 supplied by your app (React 18.3 or 19). Studio is a separate application in
 this repository and is not bundled into either player package.
 
-The package names are assigned under the maintainer’s npm account, but **registry
-publication is still pending**. Until then, use the local-package instructions
-below. After publication, the registry install command will be:
+Both player packages are published as **0.1.0** under the maintainer’s npm account:
+[React player](https://www.npmjs.com/package/@armin-eslami/gatherform-react) and
+[core](https://www.npmjs.com/package/@armin-eslami/gatherform-core).
+Install the React player in an existing React or Next.js app:
 
 ```sh
 pnpm add @armin-eslami/gatherform-react
@@ -123,7 +124,7 @@ See [the React guide](packages/react/README.md) for the contracts and cleanup be
 
 ### Use without React
 
-After registry publication, install core; Three.js is installed automatically:
+Install core; Three.js is installed automatically:
 
 ```sh
 pnpm add @armin-eslami/gatherform-core
@@ -150,7 +151,7 @@ player.gather();
 player.dispose();
 ```
 
-### Install the unpublished packages locally
+### Install local builds
 
 Build and pack them from this repository:
 

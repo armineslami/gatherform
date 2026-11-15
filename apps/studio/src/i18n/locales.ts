@@ -97,7 +97,7 @@ export const en = {
   exportHint:
     "One .gatherform file contains the prepared points and your settings. Install the player, then place the file in your app’s public folder.",
   packageStatus:
-    "The player packages are prepared for publication under @armin-eslami but are not published yet. Until publication, use the local package instructions in the README.",
+    "Install the React player from npm in your app. Core and Three.js install automatically; your app supplies React.",
   exampleType: "React example",
   exampleBasic: "Basic player",
   exampleControls: "Scatter, gather and loop",
@@ -232,7 +232,7 @@ export const fa: Record<TranslationKey, string> = {
   exportHint:
     "فایل صحنه شامل نقاط و تنظیمات شماست. پخش‌کننده را نصب و فایل را در پوشه عمومی برنامه قرار دهید.",
   packageStatus:
-    "بسته‌های پخش‌کننده برای انتشار با نام @armin-eslami آماده‌اند اما هنوز منتشر نشده‌اند. تا زمان انتشار، بسته‌های محلی را طبق راهنمای README نصب کنید.",
+    "پخش‌کننده React را از npm در برنامه خود نصب کنید. بسته core و Three.js خودکار نصب می‌شوند؛ React از برنامه شما تامین می‌شود.",
   exampleType: "نمونه ری‌اکت",
   exampleBasic: "پخش‌کننده ساده",
   exampleControls: "پراکندگی، جمع شدن و تکرار",

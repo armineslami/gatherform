@@ -3,7 +3,7 @@
 The React player for exported Gatherform scenes. Requires React 18.3 or 19 from the host app. Core and Three.js install automatically.
 Image preparation and editor dependencies are excluded from the player.
 
-After registry publication: `pnpm add @armin-eslami/gatherform-react`.
+Install: `pnpm add @armin-eslami/gatherform-react`.
 See the [installation guide](https://github.com/armineslami/gatherform#how-to-install)
 and [props, defaults and accepted values](https://github.com/armineslami/gatherform#props).
 
