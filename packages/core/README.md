@@ -1,7 +1,7 @@
 # @armin-eslami/gatherform-core
 
 A Three.js player and versioned scene codec for Gatherform's interactive image
-point clouds. Image decoding and AI processing belong to the separate Studio app.
+point clouds. Install with `pnpm add @armin-eslami/gatherform-core` after registry publication. Image decoding and AI processing belong to the separate Studio app.
 
 ```ts
 import { GatherformPlayer, loadScene } from "@armin-eslami/gatherform-core";
@@ -21,7 +21,7 @@ The host needs a nonzero size and position: relative. WebGL2 is required.
 Public exports include scene types, defaults, validation, encodeScene, decodeScene,
 loadScene, and GatherformPlayer. Inputs are validated and downloads are bounded.
 
-The package is ESM and requires the declared Three.js peer. All coordinates are
+The package is ESM. Its tested Three.js version is a regular dependency and is installed automatically. All coordinates are
 artistic local units. Scenes contain no model weights or executable code.
 Released under the MIT license. Third-party dependencies retain their own licenses.
 

@@ -603,7 +603,7 @@ export function Studio() {
           />
         </label>
         <pre>
-          <code>pnpm add @armin-eslami/gatherform-react three</code>
+          <code>pnpm add @armin-eslami/gatherform-react</code>
         </pre>
         <label className="select-control">
           {t.exampleType}

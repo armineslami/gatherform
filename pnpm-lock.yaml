@@ -227,12 +227,9 @@ importers:
       react-dom:
         specifier: 19.3.1
         version: 19.3.1(react@19.3.1)
-      three:
-        specifier: 0.187.0
-        version: 0.187.0
 
   packages/core:
-    devDependencies:
+    dependencies:
       three:
         specifier: 0.187.0
         version: 0.187.0
@@ -242,9 +239,6 @@ importers:
       '@armin-eslami/gatherform-core':
         specifier: workspace:^
         version: link:../core
-      three:
-        specifier: '>=0.185.0 <0.188.0'
-        version: 0.187.0
     devDependencies:
       react:
         specifier: 19.3.1

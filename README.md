@@ -2,7 +2,7 @@
 
 **Turn an image into an interactive particle visualization. Design it in Studio, export a scene, and play it in your own app.**
 
-[Try Studio](https://armineslami.github.io/gatherform/) · [React player](packages/react/README.md) · [Core API](packages/core/README.md) · [Performance](docs/performance.md) · [MIT license](LICENSE)
+[Try Studio](https://armineslami.github.io/gatherform/) · [How to install](#how-to-install) · [Props](#props) · [React player](packages/react/README.md) · [Core API](packages/core/README.md) · [Performance](docs/performance.md) · [MIT license](LICENSE)
 
 ![Gatherform Studio with its built-in particle demo](docs/media/studio.png)
 
@@ -54,7 +54,7 @@ Shift + drag pans when rotation and pan are both enabled. Export your work befor
 closing Studio: original image files and audio tracks are not included in scenes.
 Keep the originals if you want to regenerate depth later.
 
-## Use in a React or Next.js app
+## How to install
 
 There are two player packages:
 
@@ -64,7 +64,8 @@ There are two player packages:
 | `@armin-eslami/gatherform-core`  | The framework-independent renderer, scene loader and public types. |
 
 **React users install one Gatherform package.** The React package automatically
-installs core; `three` is a peer dependency. Studio is a separate application in
+installs core and its tested Three.js dependency. React remains a peer dependency
+supplied by your app (React 18.3 or 19). Studio is a separate application in
 this repository and is not bundled into either player package.
 
 The package names are assigned under the maintainer’s npm account, but **registry
@@ -72,7 +73,7 @@ publication is still pending**. Until then, use the local-package instructions
 below. After publication, the registry install command will be:
 
 ```sh
-pnpm add @armin-eslami/gatherform-react three
+pnpm add @armin-eslami/gatherform-react
 ```
 
 ```tsx
@@ -122,10 +123,10 @@ See [the React guide](packages/react/README.md) for the contracts and cleanup be
 
 ### Use without React
 
-After registry publication, install core and Three.js:
+After registry publication, install core; Three.js is installed automatically:
 
 ```sh
-pnpm add @armin-eslami/gatherform-core three
+pnpm add @armin-eslami/gatherform-core
 ```
 
 ```ts
@@ -165,14 +166,102 @@ overrides:
   "@armin-eslami/gatherform-core": "file:/absolute/path/gatherform/release/armin-eslami-gatherform-core-0.1.0.tgz"
 ```
 
-Then install the local packages and the peer dependency:
+Then install the local packages; Three.js is installed automatically and the app supplies React:
 
 ```sh
 pnpm add /absolute/path/gatherform/release/armin-eslami-gatherform-core-0.1.0.tgz \
-  /absolute/path/gatherform/release/armin-eslami-gatherform-react-0.1.0.tgz three
+  /absolute/path/gatherform/release/armin-eslami-gatherform-react-0.1.0.tgz
 ```
 
 Remove the local override when switching to published registry versions.
+
+## Props
+
+Use exactly one of `src` or `scene`. Callbacks and host playback options are not
+saved in scene exports. `settings` and `interactions` merge with the loaded scene:
+**your prop overrides the scene value; an omitted field keeps the scene value.**
+
+| Name                 | Required                  | Accepted value                     | Default                                                        | Description                                                                               |
+| -------------------- | ------------------------- | ---------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `src`                | Yes, unless using `scene` | Scene URL (`string`)               | —                                                              | Fetches a compact or full-detail `.gatherform` file.                                      |
+| `scene`              | Yes, unless using `src`   | Valid `GatherformScene`            | —                                                              | Uses an already prepared/decoded scene; treat its arrays as immutable.                    |
+| `settings`           | No                        | `Partial<Settings>`; see below     | Saved scene settings                                           | Overrides appearance and effects without rebuilding geometry.                             |
+| `interactions`       | No                        | `Partial<Interactions>`; see below | Saved scene interactions                                       | Controls pointer, camera and click behavior.                                              |
+| `paused`             | No                        | `boolean`                          | `false`                                                        | Freezes animation time; direct camera controls remain usable.                             |
+| `maxFps`             | No                        | `30` or `60`                       | `60`                                                           | Maximum drawing frequency, not a guaranteed frame rate.                                   |
+| `maxPixelRatio`      | No                        | Finite number, `0.5`–`2`           | `1.5`                                                          | Caps screen density; actual density also depends on the device.                           |
+| `audioLevel`         | No                        | Finite number, `0`–`1`             | `0`                                                            | Supplies audio intensity. Use the ref for frequent updates.                               |
+| `className`          | No                        | `string`                           | None                                                           | CSS classes on the outer container.                                                       |
+| `style`              | No                        | `React.CSSProperties`              | Width/height `100%`, minimum height `200px`, relative position | Container styling; provide a nonzero height. Position remains relative.                   |
+| `label`              | No                        | `string`                           | `"Interactive point cloud"`                                    | Accessible label for the visualization group.                                             |
+| `fallback`           | No                        | `React.ReactNode`                  | Error message text                                             | Displayed on error; it is not a loading placeholder.                                      |
+| `onReady`            | No                        | `() => void`                       | None                                                           | Called after successful player initialization.                                            |
+| `onError`            | No                        | `(error: Error) => void`           | None                                                           | Reports loading, validation, configuration or rendering-context errors.                   |
+| `onTransitionEnd`    | No                        | `(imageIndex: number) => void`     | None                                                           | Reports the zero-based image index after a transition finishes.                           |
+| `onLightPulseChange` | No                        | `(active: boolean) => void`        | None                                                           | Reports whether the two-second light pulse is visible.                                    |
+| `ref`                | No                        | `React.Ref<GatherformHandle>`      | None                                                           | Exposes the imperative methods below. Wait for `onReady` before issuing initial commands. |
+
+### Appearance and effect settings
+
+The defaults below are **new-scene defaults**, not replacements for values saved
+in an exported scene. All numeric inputs must be finite; out-of-range values are
+rejected. Example: `settings={{ drift: 0.16, driftSpeed: 1, trails: true }}`.
+
+| Name (`settings`) | Accepted value                       | New-scene default | Description                                                        |
+| ----------------- | ------------------------------------ | ----------------- | ------------------------------------------------------------------ |
+| `drift`           | `0`–`1`                              | `0.12`            | Strength of continuous particle drift.                             |
+| `driftSpread`     | `0`–`1`                              | `0.75`            | How widely drifting particles spread through the scene.            |
+| `driftSpeed`      | `0`–`3`                              | `1`               | Drift/trail time multiplier; `0` freezes their current phase.      |
+| `splash`          | `0`–`1`                              | `0.7`             | Scatter spread during picture transitions.                         |
+| `gather`          | `0`–`1`                              | `0.45`            | Transition speed; higher values shorten the transition.            |
+| `depth`           | `0`–`2`                              | `0.65`            | Display multiplier for the prepared depth.                         |
+| `pointSize`       | `0.25`–`6`                           | `0.85`            | Logical particle size, also affected by camera distance.           |
+| `opacity`         | `0`–`1`                              | `0.85`            | Particle opacity.                                                  |
+| `lineAngle`       | `-Math.PI`–`Math.PI`                 | `0.15`            | Angle of the drift boundary, in radians.                           |
+| `lineOffset`      | `-1.5`–`1.5`                         | `0.25`            | Drift boundary position in local scene units.                      |
+| `lineSide`        | `-1`–`1`                             | `1`               | Drift-side multiplier; use `-1` or `1` to flip sides.              |
+| `travel`          | `"swarm"`, `"melt"`                  | `"swarm"`         | Broad scatter or a more ordered transition.                        |
+| `paper`           | `"dark"`, `"light"`                  | `"dark"`          | Paper mode used for particle and overlay display.                  |
+| `tone`            | `"original"`, `"negative"`, `"mono"` | `"original"`      | Source colors, inverted colors or a single-color treatment.        |
+| `lightColor`      | Six-digit hex color (`#RRGGBB`)      | `"#ffe9c4"`       | Color used by the light pulse, scan band and monochrome treatment. |
+| `background`      | Six-digit hex color (`#RRGGBB`)      | `"#090b0d"`       | Background in dark paper mode; light paper uses `#f2f0e8`.         |
+| `track`           | `boolean`                            | `true`            | Particle tracker markers and labels.                               |
+| `links`           | `boolean`                            | `true`            | Connecting lines between tracked points.                           |
+| `scan`            | `boolean`                            | `false`           | Animated scan overlay.                                             |
+| `trails`          | `boolean`                            | `false`           | Particle motion paths, using a bounded sample.                     |
+| `marks`           | `boolean`                            | `true`            | Camera-aligned frame marks around the shape.                       |
+| `dense`           | `boolean`                            | `false`           | Denser tracker overlay.                                            |
+
+### Interaction settings
+
+These are also new-scene defaults. Example:
+`interactions={{ pointer: true, rotate: false, zoom: false, pan: false }}`.
+Disabling an interaction controls presentation, not access to downloaded scene data.
+
+| Name (`interactions`)  | Accepted value | New-scene default | Description                                                                           |
+| ---------------------- | -------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| `pointer`              | `boolean`      | `true`            | Particles respond to pointer movement.                                                |
+| `pointerStrength`      | `0`–`2`        | `1.2`             | Pointer disturbance strength.                                                         |
+| `pointerRadius`        | `0.01`–`2`     | `0.7`             | Pointer influence radius in normalized screen units; viewport height spans two units. |
+| `rotate`               | `boolean`      | `true`            | Drag to rotate the shape.                                                             |
+| `rotationLimitDegrees` | `0`–`360`      | `360`             | Rotation bound; `360` allows continuous full turns.                                   |
+| `returnOnRelease`      | `boolean`      | `false`           | Ease rotation back toward the front after dragging.                                   |
+| `zoom`                 | `boolean`      | `true`            | Wheel and ref-based zoom, bounded to `0.5`–`2` times the initial zoom.                |
+| `pan`                  | `boolean`      | `true`            | Move the view with Shift + drag when rotation is enabled.                             |
+| `clickToScatter`       | `boolean`      | `false`           | Click to trigger the scatter/gather transition. Ref methods work independently.       |
+
+### Ref methods
+
+| Method                     | Accepted input                                | Behavior                                                                         |
+| -------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------- |
+| `scatter()`                | None                                          | Separates the particles; stays scattered until gathered or transitioned.         |
+| `gather()`                 | None                                          | Restores the prepared shape.                                                     |
+| `next()`                   | None                                          | Scatters/gathers into the next picture; replays the effect for a single picture. |
+| `transitionTo(imageIndex)` | Integer from `0` to `scene.clouds.length - 1` | Changes picture; requests during an active transition are ignored.               |
+| `light()`                  | None                                          | Starts the two-second light pulse; calling again cancels it.                     |
+| `resetCamera()`            | None                                          | Restores the initial view.                                                       |
+| `zoomBy(factor)`           | Finite number greater than `0`                | Multiplies zoom within its bounds; respects `interactions.zoom`.                 |
+| `setAudioLevel(level)`     | Finite number, `0`–`1`                        | Updates audio response directly without a React render.                          |
 
 ## How it works
 

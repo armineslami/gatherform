@@ -22,8 +22,7 @@
     "@armin-eslami/gatherform-core": "workspace:^"
   },
   "peerDependencies": {
-    "react": "^18.3.0 || ^19.0.0",
-    "three": ">=0.185.0 <0.188.0"
+    "react": "^18.3.0 || ^19.0.0"
   },
   "devDependencies": {
     "react": "19.3.1"
