@@ -58,10 +58,19 @@ with the reference is still incomplete.
 ## Visualization contract
 
 New scenes use 524,288 points with independent particle lifetimes and staggered
-scatter/gather timing. Brightness depth is softened around contours to give flat
-artwork curved relief. It remains an artistic estimate. A small depth grain keeps
-the surface particulate. Existing exported point geometry is preserved on import;
-re-import the source image to generate the updated relief.
+scatter/gather timing. Transparent artwork is inflated from its silhouette:
+strokes round over about 1/30 of the artwork's size, wide areas keep a flat face,
+and steep sides receive proportionally more points so a turned logo stays solid.
+Point density follows opacity, so changing colors alone does not change the
+shape. Opaque images use brightness relief by default. For exact layer order, import
+a depth map with lighter pixels on the parts that should sit closer to the camera.
+Existing exports keep their prepared points. Re-add the original image to use the
+updated preparation.
+
+Fade canvas edges softens particles and trails on all four sides, even during
+pointer movement. Scatter and gather hide frame marks until the artwork settles.
+A transparent background lets the page show through the player. Studio's
+page color previews that page behind the scene and is not exported.
 
 Rotation uses each prepared cloud's fixed bounds center. The 360-degree limit
 permits continuous turns, while smaller saved or overridden limits still apply.
@@ -71,7 +80,7 @@ that brush so the shape does not distort while being turned.
 Known fidelity gaps remain in the image-dependent depth field, particle
 correspondence between images, tracker attachment during dispersal, full-cloud trail density and color/contrast calibration. The preparation
 cutoff applies when preparing images, rather than resampling existing clouds as
-the slider moves. Compare these with the intended artwork before a production
+the slider moves. It removes those pixels from both point sampling and shape relief. Compare these with the intended artwork before a production
 embedding. AI depth completed successfully for the local logo review. It has separate
 download and inference costs in Studio.
 
@@ -81,9 +90,17 @@ rotation rather than intersecting the image's original plane. Dark-paper grains
 use source colors; light-paper grains use their ink colors. Point sizes vary per
 grain. Slow, shallow idle sway runs with drift and respects reduced motion.
 
+Grains are firm discs of at least 1.5 device pixels. A smaller grain draws at that
+size with ink scaled to its true area, so sub-pixel grains no longer snap between
+pixels and flicker as the picture sways. Grains blend without a depth test, so none
+pops in or out of view; nearer grains carry more ink, so relief reads head-on. The
+player draws at up to 2× screen density by default.
+
 Preparation retains dark opaque pixels by default and interpolates depth between
-pixels. AI relief includes 35% softened brightness relief to round flat artwork's
-contours; imported depth maps remain authoritative. These changes require preparing
+pixels. AI depth is snapped to the picture's own edges with a guided filter, then
+mixed with 35% softened relief (silhouette relief for cutouts, brightness relief
+otherwise) to round flat artwork's contours. Steep AI relief receives more points,
+as cutout sides do; imported depth maps remain authoritative. These changes require preparing
 the source image again. The player increases displayed depth relief for existing
 scenes too; authors may lower Depth if their saved scene now looks too deep.
 
@@ -114,7 +131,7 @@ are prepared on cloud changes, never uploaded per frame. Scan runs through local
 depth over an eight-second cycle with a rest between sweeps. Frame marks include
 all four sides and drift/image/point readouts.
 
-Compact version 4 stores gzip-compressed local shape, density, color and depth
+Compact exports store gzip-compressed local shape, density, color and depth
 summaries rather than every particle. It is lossy, retains settings and point count, and rebuilds grains
 once on load with cancellation and bounded output. Use full-detail export when
 exact prepared positions matter. Disabled trails allocate no sample buffers.
@@ -134,6 +151,9 @@ coefficients and exact byte lengths before rebuilding the point budget. Earlier
 version 2 grids and version 3 surfaces still load. Unchanged patches are retained in
 a weak cache so repeated exports do not add another generation of approximation.
 The source cloud and its arrays are immutable, as required by the player contract.
+Version 5 stores separate surfaces for flat cutouts with distinct dark and light
+tones. Keeping both tones within each patch preserves internal edges. The
+player still reads version 4 files.
 
 Version 4 adds a separately packed boundary direction and finer distance for each
 edge patch. Neighbor density stabilizes edge directions around curves. Direction

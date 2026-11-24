@@ -61,6 +61,9 @@ export function Studio() {
 
   const [maxFps, setMaxFps] = useState<30 | 60>(60);
 
+  // Lets authors judge a transparent scene against the page it will sit on.
+  const [previewPageColor, setPreviewPageColor] = useState("#090b0d");
+
   const [lightPulseActive, setLightPulseActive] = useState(false);
 
   const [exportOpen, setExportOpen] = useState(false);
@@ -81,6 +84,7 @@ export function Studio() {
     playerExample,
     maxFps,
     scene?.interactions ?? {},
+    scene?.settings ?? {},
   );
 
   // ---------------------------------------------------------
@@ -235,9 +239,11 @@ export function Studio() {
             ref={stageRef}
             style={{
               background:
-                scene?.settings.paper === "light"
-                  ? "#f2f0e8"
-                  : scene?.settings.background,
+                scene?.settings.background === "transparent"
+                  ? previewPageColor
+                  : scene?.settings.paper === "light"
+                    ? "#f2f0e8"
+                    : scene?.settings.background,
             }}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
@@ -390,6 +396,12 @@ export function Studio() {
             <span className="transport-spacer" />
             <button disabled={!scene} onClick={() => setPaused(!paused)}>
               {paused ? t.resume : t.pause}
+            </button>
+            <button
+              disabled={!scene}
+              onClick={() => playerRef.current?.replayIntro()}
+            >
+              {t.replayIntro}
             </button>
             <button
               disabled={!scene}
@@ -551,6 +563,8 @@ export function Studio() {
                   locale={locale}
                   settings={scene.settings}
                   interactions={scene.interactions}
+                  previewPageColor={previewPageColor}
+                  onPreviewPageColor={setPreviewPageColor}
                   t={t}
                   onSettings={(patch) =>
                     setScene({

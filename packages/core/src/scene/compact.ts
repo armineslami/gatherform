@@ -18,18 +18,127 @@ const CELL_BYTES = 6;
 const GRID_BYTES = GRID_SIZE * GRID_SIZE * CELL_BYTES;
 const LEGACY_MAGIC = 0x47464332;
 const SURFACE_MAGIC = 0x47464333;
-const MAGIC = 0x47464334;
+const PRECISE_SURFACE_MAGIC = 0x47464334;
+const MAGIC = 0x47464335;
+const savedPictures = new WeakMap<Cloud, Uint8Array>();
+
+function encodePicture(cloud: Cloud): Uint8Array {
+  const saved = savedPictures.get(cloud);
+  if (saved) return saved;
+
+  const pointCount = cloud.positions.length / 3;
+  let darkCount = 0;
+  let lightCount = 0;
+  const toneCounts = [0, 0];
+  const toneAlphaSums = [0, 0];
+  // Keep two distinct tones in separate surfaces so a diagonal between them does not become a row of gray squares.
+  const brightness = (offset: number) =>
+    Math.max(
+      cloud.colors[offset],
+      cloud.colors[offset + 1],
+      cloud.colors[offset + 2],
+    );
+  // Any depth source qualifies: the two-tone test below decides, not how depth was made.
+  for (let offset = 0; offset < cloud.colors.length; offset += 4) {
+    const value = brightness(offset);
+    if (value <= 95) darkCount++;
+    if (value >= 175) lightCount++;
+    const tone = value < 135 ? 0 : 1;
+    toneCounts[tone]++;
+    toneAlphaSums[tone] += cloud.colors[offset + 3];
+  }
+
+  let surfaces: Uint8Array[];
+  let firstCount = 0;
+  if (
+    Math.min(darkCount, lightCount) >= pointCount * 0.05 &&
+    darkCount + lightCount >= pointCount * 0.97 &&
+    toneAlphaSums.every((sum, tone) => sum >= toneCounts[tone] * 128)
+  ) {
+    firstCount = toneCounts[0];
+    const toneClouds = toneCounts.map((count) => ({
+      ...cloud,
+      positions: new Float32Array(count * 3),
+      colors: new Uint8Array(count * 4),
+    }));
+    const offsets = [0, 0];
+    for (let point = 0; point < pointCount; point++) {
+      const tone = brightness(point * 4) < 135 ? 0 : 1;
+      const index = offsets[tone]++;
+      toneClouds[tone].positions.set(
+        cloud.positions.subarray(point * 3, point * 3 + 3),
+        index * 3,
+      );
+      toneClouds[tone].colors.set(
+        cloud.colors.subarray(point * 4, point * 4 + 4),
+        index * 4,
+      );
+    }
+    surfaces = toneClouds.map(encodeSurface);
+  } else {
+    surfaces = [encodeSurface(cloud)];
+  }
+
+  const bytes = new Uint8Array(
+    4 + surfaces.reduce((length, surface) => length + surface.length, 0),
+  );
+  new DataView(bytes.buffer).setUint32(0, firstCount, true);
+  let offset = 4;
+  for (const surface of surfaces) {
+    bytes.set(surface, offset);
+    offset += surface.length;
+  }
+  return bytes;
+}
+
+function mergeTones(first: Cloud, second: Cloud): Cloud {
+  const firstCount = first.positions.length / 3;
+  const secondCount = second.positions.length / 3;
+  const positions = new Float32Array(
+    first.positions.length + second.positions.length,
+  );
+  const colors = new Uint8Array(first.colors.length + second.colors.length);
+  let left = 0;
+  let right = 0;
+
+  // Preserve the top-to-bottom order used by picture transitions and trackers.
+  for (let point = 0; point < firstCount + secondCount; point++) {
+    const useFirst =
+      right === secondCount ||
+      (left < firstCount &&
+        first.positions[left * 3 + 1] >= second.positions[right * 3 + 1]);
+    const cloud = useFirst ? first : second;
+    const index = useFirst ? left++ : right++;
+    positions.set(
+      cloud.positions.subarray(index * 3, index * 3 + 3),
+      point * 3,
+    );
+    colors.set(cloud.colors.subarray(index * 4, index * 4 + 4), point * 4);
+  }
+  return { ...first, positions, colors };
+}
 
 /** A compact surface trades exact grains for a small download; the full scene format stays lossless. */
 export async function encodeCompactScene(
   scene: GatherformScene,
 ): Promise<ArrayBuffer> {
   validateScene(scene);
-  const surfaces: Uint8Array[] = [];
+  const pictures: Uint8Array[] = [];
   for (const cloud of scene.clouds) {
-    surfaces.push(encodeSurface(cloud));
+    pictures.push(encodePicture(cloud));
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
+  const hasSeparateTones = pictures.some(
+    (picture) =>
+      new DataView(
+        picture.buffer,
+        picture.byteOffset,
+        picture.byteLength,
+      ).getUint32(0, true) > 0,
+  );
+  const surfaces = hasSeparateTones
+    ? pictures
+    : pictures.map((picture) => picture.subarray(4));
   const metadata = encodeScene({
     ...scene,
     clouds: scene.clouds.map((cloud) => ({
@@ -44,7 +153,7 @@ export async function encodeCompactScene(
       surfaces.reduce((total, surface) => total + surface.length, 0),
   );
   const view = new DataView(bytes.buffer);
-  view.setUint32(0, MAGIC);
+  view.setUint32(0, hasSeparateTones ? MAGIC : PRECISE_SURFACE_MAGIC);
   view.setUint32(4, metadata.byteLength, true);
   bytes.set(new Uint8Array(metadata), 8);
   let surfaceOffset = 8 + metadata.byteLength;
@@ -87,7 +196,10 @@ export async function decodeSceneFile(
       const { done, value } = await reader.read();
       if (done) break;
       length += value.length;
-      if (length > 4 * Math.max(GRID_BYTES, MAX_SURFACE_BYTES) + 65536 + 16)
+      if (
+        length >
+        4 * Math.max(GRID_BYTES, 4 + 2 * MAX_SURFACE_BYTES) + 65536 + 16
+      )
         throw new Error("Compact scene expands beyond its limit.");
       chunks.push(value);
     }
@@ -106,7 +218,9 @@ export async function decodeSceneFile(
   const view = new DataView(bytes.buffer);
   if (
     length < 12 ||
-    ![MAGIC, SURFACE_MAGIC, LEGACY_MAGIC].includes(view.getUint32(0))
+    ![MAGIC, PRECISE_SURFACE_MAGIC, SURFACE_MAGIC, LEGACY_MAGIC].includes(
+      view.getUint32(0),
+    )
   )
     throw new Error("Invalid or unsupported compact scene.");
   const headerLength = view.getUint32(4, true);
@@ -126,16 +240,41 @@ export async function decodeSceneFile(
     let surfaceOffset = 8 + headerLength;
     for (const cloud of scene.clouds) {
       signal?.throwIfAborted();
-      const surface = await decodeSurface(
+      const pictureStart = surfaceOffset;
+      let firstCount = 0;
+      if (view.getUint32(0) === MAGIC) {
+        if (surfaceOffset + 4 > length - 4)
+          throw new Error("Truncated compact picture.");
+        firstCount = view.getUint32(surfaceOffset, true);
+        if (firstCount >= pointCount)
+          throw new Error("Invalid compact tone count.");
+        surfaceOffset += 4;
+      }
+      const first = await decodeSurface(
         bytes,
         surfaceOffset,
         length - 4,
         cloud,
-        pointCount,
+        firstCount || pointCount,
         signal,
       );
-      clouds.push(surface.cloud);
-      surfaceOffset = surface.nextOffset;
+      surfaceOffset = first.nextOffset;
+      let picture = first.cloud;
+      if (firstCount) {
+        const second = await decodeSurface(
+          bytes,
+          surfaceOffset,
+          length - 4,
+          cloud,
+          pointCount - firstCount,
+          signal,
+        );
+        picture = mergeTones(first.cloud, second.cloud);
+        surfaceOffset = second.nextOffset;
+      }
+      if (view.getUint32(0) === MAGIC)
+        savedPictures.set(picture, bytes.slice(pictureStart, surfaceOffset));
+      clouds.push(picture);
     }
     if (surfaceOffset !== length - 4)
       throw new Error("Unexpected compact surface bytes.");

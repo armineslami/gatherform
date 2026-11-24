@@ -1,12 +1,16 @@
-import type { Interactions } from "@armin-eslami/gatherform-core";
+import type { Interactions, Settings } from "@armin-eslami/gatherform-core";
 
 export type PlayerExample = "basic" | "controls" | "audio";
 
-/** Copy a complete host component; media and playback controls belong to the app. */
+/**
+ * Copy a complete host component; media and playback controls belong to the app.
+ * Settings and interactions are written out in full so every saved value is visible and editable.
+ */
 export function createPlayerExample(
   kind: PlayerExample,
   maxFps: 30 | 60,
   interactions: Partial<Interactions>,
+  settings: Partial<Settings> = {},
 ): string {
   const controlled = kind !== "basic";
   const audio = kind === "audio";
@@ -45,6 +49,7 @@ ${audio ? audioEffect : ""}
 ${controlled ? "      ref={playerRef}\n      onReady={() => setReady(true)}\n" : ""}      src="/visualizations/logo.gatherform"
       style={{ height: 480 }}
       maxFps={${maxFps}}
+      settings={${JSON.stringify(settings, null, 2).replaceAll("\n", "\n      ")}}
       interactions={${JSON.stringify(interactions, null, 2).replaceAll("\n", "\n      ")}}
     />`;
   const buttons = controlled

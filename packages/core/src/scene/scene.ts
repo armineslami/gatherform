@@ -12,6 +12,7 @@ export interface Settings {
   gather: number;
   depth: number;
   pointSize: number;
+  density: number;
   opacity: number;
   lineAngle: number;
   lineOffset: number;
@@ -20,7 +21,16 @@ export interface Settings {
   paper: "dark" | "light";
   tone: "original" | "negative" | "mono";
   lightColor: string;
+  /** Six-digit hex color, or "transparent" to show the host page in either paper mode. */
   background: string;
+  /** Feather points and trails where the canvas meets the page. */
+  fadeEdges: boolean;
+  /** Camera framing multiplier; above 1 the artwork fills more of the canvas. */
+  frameScale: number;
+  /** Open the scene as scattered grains that gather after gatherDelay seconds. */
+  startScattered: boolean;
+  /** Seconds of animation time before a scattered start gathers. */
+  gatherDelay: number;
   track: boolean;
   links: boolean;
   scan: boolean;
@@ -49,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gather: 0.45,
   depth: 0.65,
   pointSize: 0.85,
+  density: 1,
   opacity: 0.85,
   lineAngle: 0.15,
   lineOffset: 0.25,
@@ -58,6 +69,10 @@ export const DEFAULT_SETTINGS: Settings = {
   tone: "original",
   lightColor: "#ffe9c4",
   background: "#090b0d",
+  fadeEdges: true,
+  frameScale: 1,
+  startScattered: false,
+  gatherDelay: 1,
   track: true,
   links: true,
   scan: false,
@@ -109,6 +124,9 @@ const bounds: Record<string, [number, number]> = {
   gather: [0, 1],
   depth: [0, 2],
   pointSize: [0.25, 6],
+  density: [1, 8],
+  frameScale: [0.5, 2],
+  gatherDelay: [0, 10],
   opacity: [0, 1],
   lineAngle: [-Math.PI, Math.PI],
   lineOffset: [-1.5, 1.5],
@@ -140,6 +158,8 @@ function validated<T extends Settings | Interactions>(
     const fallback = defaults[key];
     if (typeof field !== typeof fallback) throw new Error(`Invalid ${key}.`);
     if (typeof field === "number") {
+      if (key === "density" && !Number.isInteger(field))
+        throw new Error("Density must be a whole number.");
       const [minimum, maximum] = bounds[key];
       if (!Number.isFinite(field) || field < minimum || field > maximum)
         throw new Error(`Out of range ${key}.`);
@@ -153,7 +173,8 @@ function validated<T extends Settings | Interactions>(
       if (
         choices[key]
           ? !choices[key].includes(field)
-          : !/^#[0-9a-f]{6}$/i.test(field)
+          : !(key === "background" && field === "transparent") &&
+            !/^#[0-9a-f]{6}$/i.test(field)
       )
         throw new Error(`Invalid ${key}.`);
     }
@@ -323,8 +344,56 @@ export function decodeScene(buffer: ArrayBuffer): GatherformScene {
   return scene;
 }
 
-/** Bound streamed downloads before allocating the complete scene. */
+const preloadedScenes = new Map<string, Promise<GatherformScene>>();
+
+/**
+ * Start downloading and decoding a scene before any player asks for it, for
+ * example at module load or on route hover. The next successful loadScene(src)
+ * uses the result and releases it; a failed preload falls back to a new request.
+ */
+export function preloadScene(src: string): void {
+  if (preloadedScenes.has(src)) return;
+
+  const pending = fetchScene(src);
+  preloadedScenes.set(src, pending);
+  pending.catch(() => {
+    if (preloadedScenes.get(src) === pending) preloadedScenes.delete(src);
+  });
+}
+
+/** Load a scene, reusing a matching preloadScene request when one exists. */
 export async function loadScene(
+  src: string,
+  signal?: AbortSignal,
+): Promise<GatherformScene> {
+  signal?.throwIfAborted();
+  const preloaded = preloadedScenes.get(src);
+  if (preloaded) {
+    try {
+      const scene = await abortable(preloaded, signal);
+      // Keep the entry for a remount after an aborted wait, as in React Strict Mode.
+      preloadedScenes.delete(src);
+      return scene;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+    }
+  }
+  return fetchScene(src, signal);
+}
+
+function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    promise
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+/** Bound streamed downloads before allocating the complete scene. */
+async function fetchScene(
   src: string,
   signal?: AbortSignal,
 ): Promise<GatherformScene> {

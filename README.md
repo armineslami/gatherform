@@ -68,7 +68,7 @@ installs core and its tested Three.js dependency. React remains a peer dependenc
 supplied by your app (React 18.3 or 19). Studio is a separate application in
 this repository and is not bundled into either player package.
 
-Both player packages are published as **0.1.0** under the maintainer’s npm account:
+Both player packages are published as **0.3.0** under the maintainer’s npm account:
 [React player](https://www.npmjs.com/package/@armin-eslami/gatherform-react) and
 [core](https://www.npmjs.com/package/@armin-eslami/gatherform-core).
 Install the React player in an existing React or Next.js app:
@@ -111,7 +111,7 @@ Studio’s export dialog includes three complete, copyable examples:
 - **Audio response and controls:** the same controls plus a separate audio track that drives particle movement.
 
 A React ref exposes `scatter()`, `gather()`, `next()`, `transitionTo(index)`,
-`light()`, `resetCamera()`, `zoomBy(factor)` and `setAudioLevel(level)`.
+`light()`, `resetCamera()`, `replayIntro()`, `zoomBy(factor)` and `setAudioLevel(level)`.
 Use those methods from your own buttons, page events or animation schedule.
 The loop example owns and cleans up its timer; there is no built-in `loop` prop.
 
@@ -164,14 +164,14 @@ In the consuming app’s `pnpm-workspace.yaml`, merge this override with any exi
 
 ```yaml
 overrides:
-  "@armin-eslami/gatherform-core": "file:/absolute/path/gatherform/release/armin-eslami-gatherform-core-0.1.0.tgz"
+  "@armin-eslami/gatherform-core": "file:/absolute/path/gatherform/release/armin-eslami-gatherform-core-0.3.0.tgz"
 ```
 
 Then install the local packages; Three.js is installed automatically and the app supplies React:
 
 ```sh
-pnpm add /absolute/path/gatherform/release/armin-eslami-gatherform-core-0.1.0.tgz \
-  /absolute/path/gatherform/release/armin-eslami-gatherform-react-0.1.0.tgz
+pnpm add /absolute/path/gatherform/release/armin-eslami-gatherform-core-0.3.0.tgz \
+  /absolute/path/gatherform/release/armin-eslami-gatherform-react-0.3.0.tgz
 ```
 
 Remove the local override when switching to published registry versions.
@@ -182,25 +182,26 @@ Use exactly one of `src` or `scene`. Callbacks and host playback options are not
 saved in scene exports. `settings` and `interactions` merge with the loaded scene:
 **your prop overrides the scene value; an omitted field keeps the scene value.**
 
-| Name                 | Required                  | Accepted value                     | Default                                                        | Description                                                                               |
-| -------------------- | ------------------------- | ---------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `src`                | Yes, unless using `scene` | Scene URL (`string`)               | —                                                              | Fetches a compact or full-detail `.gatherform` file.                                      |
-| `scene`              | Yes, unless using `src`   | Valid `GatherformScene`            | —                                                              | Uses an already prepared/decoded scene; treat its arrays as immutable.                    |
-| `settings`           | No                        | `Partial<Settings>`; see below     | Saved scene settings                                           | Overrides appearance and effects without rebuilding geometry.                             |
-| `interactions`       | No                        | `Partial<Interactions>`; see below | Saved scene interactions                                       | Controls pointer, camera and click behavior.                                              |
-| `paused`             | No                        | `boolean`                          | `false`                                                        | Freezes animation time; direct camera controls remain usable.                             |
-| `maxFps`             | No                        | `30` or `60`                       | `60`                                                           | Maximum drawing frequency, not a guaranteed frame rate.                                   |
-| `maxPixelRatio`      | No                        | Finite number, `0.5`–`2`           | `1.5`                                                          | Caps screen density; actual density also depends on the device.                           |
-| `audioLevel`         | No                        | Finite number, `0`–`1`             | `0`                                                            | Supplies audio intensity. Use the ref for frequent updates.                               |
-| `className`          | No                        | `string`                           | None                                                           | CSS classes on the outer container.                                                       |
-| `style`              | No                        | `React.CSSProperties`              | Width/height `100%`, minimum height `200px`, relative position | Container styling; provide a nonzero height. Position remains relative.                   |
-| `label`              | No                        | `string`                           | `"Interactive point cloud"`                                    | Accessible label for the visualization group.                                             |
-| `fallback`           | No                        | `React.ReactNode`                  | Error message text                                             | Displayed on error; it is not a loading placeholder.                                      |
-| `onReady`            | No                        | `() => void`                       | None                                                           | Called after successful player initialization.                                            |
-| `onError`            | No                        | `(error: Error) => void`           | None                                                           | Reports loading, validation, configuration or rendering-context errors.                   |
-| `onTransitionEnd`    | No                        | `(imageIndex: number) => void`     | None                                                           | Reports the zero-based image index after a transition finishes.                           |
-| `onLightPulseChange` | No                        | `(active: boolean) => void`        | None                                                           | Reports whether the two-second light pulse is visible.                                    |
-| `ref`                | No                        | `React.Ref<GatherformHandle>`      | None                                                           | Exposes the imperative methods below. Wait for `onReady` before issuing initial commands. |
+| Name                 | Required                  | Accepted value                             | Default                                                        | Description                                                                                                                   |
+| -------------------- | ------------------------- | ------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `src`                | Yes, unless using `scene` | Scene URL (`string`)                       | —                                                              | Fetches a compact or full-detail `.gatherform` file.                                                                          |
+| `scene`              | Yes, unless using `src`   | Valid `GatherformScene`                    | —                                                              | Uses an already prepared/decoded scene; treat its arrays as immutable.                                                        |
+| `settings`           | No                        | `Partial<Settings>`; see below             | Saved scene settings                                           | Overrides appearance and effects without rebuilding geometry.                                                                 |
+| `interactions`       | No                        | `Partial<Interactions>`; see below         | Saved scene interactions                                       | Controls pointer, camera and click behavior.                                                                                  |
+| `paused`             | No                        | `boolean`                                  | `false`                                                        | Freezes animation time; direct camera controls remain usable.                                                                 |
+| `maxFps`             | No                        | `30` or `60`                               | `60`                                                           | Maximum drawing frequency, not a guaranteed frame rate.                                                                       |
+| `maxPixelRatio`      | No                        | Finite number, `0.5`–`2`                   | `2`                                                            | Caps screen density; actual density also depends on the device.                                                               |
+| `audioLevel`         | No                        | Finite number, `0`–`1`                     | `0`                                                            | Supplies audio intensity. Use the ref for frequent updates.                                                                   |
+| `className`          | No                        | `string`                                   | None                                                           | CSS classes on the outer container.                                                                                           |
+| `style`              | No                        | `React.CSSProperties`                      | Width/height `100%`, minimum height `200px`, relative position | Container styling; provide a nonzero height. Position remains relative.                                                       |
+| `label`              | No                        | `string`                                   | `"Interactive point cloud"`                                    | Accessible label for the visualization group.                                                                                 |
+| `fallback`           | No                        | `React.ReactNode`                          | Error message text                                             | Displayed on error; it is not a loading placeholder.                                                                          |
+| `placeholder`        | No                        | `React.ReactNode` or `React.ComponentType` | None                                                           | Shown while the scene downloads and decodes. Pass an element (`<Loader />`) or a component without required props (`Loader`). |
+| `onReady`            | No                        | `() => void`                               | None                                                           | Called after successful player initialization.                                                                                |
+| `onError`            | No                        | `(error: Error) => void`                   | None                                                           | Reports loading, validation, configuration or rendering-context errors.                                                       |
+| `onTransitionEnd`    | No                        | `(imageIndex: number) => void`             | None                                                           | Reports the zero-based image index after a transition finishes.                                                               |
+| `onLightPulseChange` | No                        | `(active: boolean) => void`                | None                                                           | Reports whether the two-second light pulse is visible.                                                                        |
+| `ref`                | No                        | `React.Ref<GatherformHandle>`              | None                                                           | Exposes the imperative methods below. Wait for `onReady` before issuing initial commands.                                     |
 
 ### Appearance and effect settings
 
@@ -208,30 +209,35 @@ The defaults below are **new-scene defaults**, not replacements for values saved
 in an exported scene. All numeric inputs must be finite; out-of-range values are
 rejected. Example: `settings={{ drift: 0.16, driftSpeed: 1, trails: true }}`.
 
-| Name (`settings`) | Accepted value                       | New-scene default | Description                                                        |
-| ----------------- | ------------------------------------ | ----------------- | ------------------------------------------------------------------ |
-| `drift`           | `0`–`1`                              | `0.12`            | Strength of continuous particle drift.                             |
-| `driftSpread`     | `0`–`1`                              | `0.75`            | How widely drifting particles spread through the scene.            |
-| `driftSpeed`      | `0`–`3`                              | `1`               | Drift/trail time multiplier; `0` freezes their current phase.      |
-| `splash`          | `0`–`1`                              | `0.7`             | Scatter spread during picture transitions.                         |
-| `gather`          | `0`–`1`                              | `0.45`            | Transition speed; higher values shorten the transition.            |
-| `depth`           | `0`–`2`                              | `0.65`            | Display multiplier for the prepared depth.                         |
-| `pointSize`       | `0.25`–`6`                           | `0.85`            | Logical particle size, also affected by camera distance.           |
-| `opacity`         | `0`–`1`                              | `0.85`            | Particle opacity.                                                  |
-| `lineAngle`       | `-Math.PI`–`Math.PI`                 | `0.15`            | Angle of the drift boundary, in radians.                           |
-| `lineOffset`      | `-1.5`–`1.5`                         | `0.25`            | Drift boundary position in local scene units.                      |
-| `lineSide`        | `-1`–`1`                             | `1`               | Drift-side multiplier; use `-1` or `1` to flip sides.              |
-| `travel`          | `"swarm"`, `"melt"`                  | `"swarm"`         | Broad scatter or a more ordered transition.                        |
-| `paper`           | `"dark"`, `"light"`                  | `"dark"`          | Paper mode used for particle and overlay display.                  |
-| `tone`            | `"original"`, `"negative"`, `"mono"` | `"original"`      | Source colors, inverted colors or a single-color treatment.        |
-| `lightColor`      | Six-digit hex color (`#RRGGBB`)      | `"#ffe9c4"`       | Color used by the light pulse, scan band and monochrome treatment. |
-| `background`      | Six-digit hex color (`#RRGGBB`)      | `"#090b0d"`       | Background in dark paper mode; light paper uses `#f2f0e8`.         |
-| `track`           | `boolean`                            | `true`            | Particle tracker markers and labels.                               |
-| `links`           | `boolean`                            | `true`            | Connecting lines between tracked points.                           |
-| `scan`            | `boolean`                            | `false`           | Animated scan overlay.                                             |
-| `trails`          | `boolean`                            | `false`           | Particle motion paths, using a bounded sample.                     |
-| `marks`           | `boolean`                            | `true`            | Camera-aligned frame marks around the shape.                       |
-| `dense`           | `boolean`                            | `false`           | Denser tracker overlay.                                            |
+| Name (`settings`) | Accepted value                                     | New-scene default | Description                                                                                                                                                      |
+| ----------------- | -------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drift`           | `0`–`1`                                            | `0.12`            | Strength of continuous particle drift.                                                                                                                           |
+| `driftSpread`     | `0`–`1`                                            | `0.75`            | How widely drifting particles spread through the scene.                                                                                                          |
+| `driftSpeed`      | `0`–`3`                                            | `1`               | Drift/trail time multiplier; `0` freezes their current phase.                                                                                                    |
+| `splash`          | `0`–`1`                                            | `0.7`             | Scatter spread during picture transitions.                                                                                                                       |
+| `gather`          | `0`–`1`                                            | `0.45`            | Transition speed; higher values shorten the transition.                                                                                                          |
+| `depth`           | `0`–`2`                                            | `0.65`            | Display multiplier for the prepared depth.                                                                                                                       |
+| `density`         | Integers 1–8                                       | `1`               | Grains drawn per prepared point. Higher density increases GPU work; raise `pointSize` first for solid ink.                                                       |
+| `pointSize`       | `0.25`–`6`                                         | `0.85`            | Logical particle size, also affected by camera distance. Grains never draw below 1.5 device pixels; smaller ones draw at that size with proportionally less ink. |
+| `opacity`         | `0`–`1`                                            | `0.85`            | Particle opacity.                                                                                                                                                |
+| `lineAngle`       | `-Math.PI`–`Math.PI`                               | `0.15`            | Angle of the drift boundary, in radians.                                                                                                                         |
+| `lineOffset`      | `-1.5`–`1.5`                                       | `0.25`            | Drift boundary position in local scene units.                                                                                                                    |
+| `lineSide`        | `-1`–`1`                                           | `1`               | Drift-side multiplier; use `-1` or `1` to flip sides.                                                                                                            |
+| `travel`          | `"swarm"`, `"melt"`                                | `"swarm"`         | Broad scatter or a more ordered transition.                                                                                                                      |
+| `paper`           | `"dark"`, `"light"`                                | `"dark"`          | Paper mode used for particle and overlay display.                                                                                                                |
+| `tone`            | `"original"`, `"negative"`, `"mono"`               | `"original"`      | Source colors, inverted colors or a single-color treatment.                                                                                                      |
+| `lightColor`      | Six-digit hex color (`#RRGGBB`) or `"transparent"` | `"#ffe9c4"`       | Color used by the light pulse, scan band and monochrome treatment.                                                                                               |
+| `background`      | Six-digit hex color (`#RRGGBB`) or `"transparent"` | `"#090b0d"`       | Background in dark paper mode; light paper uses `#f2f0e8`. `"transparent"` shows the host page in either mode.                                                   |
+| `fadeEdges`       | Boolean                                            | `true`            | Softens all four canvas edges for particles and trails.                                                                                                          |
+| `frameScale`      | `0.5`–`2`                                          | `1`               | Camera framing. Above 1 the artwork fills more of the canvas; drift near the edges may be cut.                                                                   |
+| `startScattered`  | Boolean                                            | `false`           | Opens as scattered grains that gather after `gatherDelay`. Reduced motion shows the shape at once.                                                               |
+| `gatherDelay`     | `0`–`10`                                           | `1`               | Seconds of animation time before a scattered start gathers.                                                                                                      |
+| `track`           | `boolean`                                          | `true`            | Particle tracker markers and labels.                                                                                                                             |
+| `links`           | `boolean`                                          | `true`            | Connecting lines between tracked points.                                                                                                                         |
+| `scan`            | `boolean`                                          | `false`           | Animated scan overlay.                                                                                                                                           |
+| `trails`          | `boolean`                                          | `false`           | Particle motion paths, using a bounded sample.                                                                                                                   |
+| `marks`           | `boolean`                                          | `true`            | Camera-aligned frame marks around the shape.                                                                                                                     |
+| `dense`           | `boolean`                                          | `false`           | Denser tracker overlay.                                                                                                                                          |
 
 ### Interaction settings
 
@@ -261,14 +267,15 @@ Disabling an interaction controls presentation, not access to downloaded scene d
 | `transitionTo(imageIndex)` | Integer from `0` to `scene.clouds.length - 1` | Changes picture; requests during an active transition are ignored.               |
 | `light()`                  | None                                          | Starts the two-second light pulse; calling again cancels it.                     |
 | `resetCamera()`            | None                                          | Restores the initial view.                                                       |
+| `replayIntro()`            | None                                          | Scatters at once, then gathers after the scene's `gatherDelay`.                  |
 | `zoomBy(factor)`           | Finite number greater than `0`                | Multiplies zoom within its bounds; respects `interactions.zoom`.                 |
 | `setAudioLevel(level)`     | Finite number, `0`–`1`                        | Updates audio response directly without a React render.                          |
 
 ## How it works
 
-Studio samples image pixels into prepared point positions and colors. Brightness
-produces artistic depth by default. A grayscale depth map can replace that depth;
-optional AI depth estimates which parts are nearer or farther away. AI runs in a
+Studio samples image pixels into prepared point positions and colors. Transparent
+artwork gets depth from its silhouette. Opaque images get depth from brightness.
+You can replace either with a grayscale depth map or an AI estimate. AI runs in a
 worker after downloading its model. It is not measured 3D geometry, and flat logos
 may show only a subtle change from the front. Images stay on your device.
 
@@ -344,3 +351,29 @@ Third-party dependencies and optional AI models retain their own licenses.
 Inspired by [Gather Lite by DAO](https://gather.be-of-dao.com/). Gatherform is an
 independent implementation; the reference site’s branding, source code and artwork
 are not included. See the [feature guide](docs/features.md) for attribution and limits.
+
+Studio sizes newly imported transparent logos by their visible artwork. Transparent padding does not change their size or relief. Saved files keep their prepared geometry. Reimport the source image to rebuild an older logo.
+
+### Faster first paint
+
+Start the scene download before the player mounts and show a static image meanwhile:
+
+```tsx
+import { Gatherform, preloadScene } from "@armin-eslami/gatherform-react";
+
+// Runs once when this module loads, before the component renders.
+preloadScene("/visualizations/logo.gatherform");
+
+<Gatherform
+  src="/visualizations/logo.gatherform"
+  placeholder={
+    <img
+      src="/logo.png"
+      alt=""
+      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+    />
+  }
+/>;
+```
+
+Also add `<link rel="preload" href="/visualizations/logo.gatherform" as="fetch" crossorigin>` to the page head when the scene is above the fold.

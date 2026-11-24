@@ -11,6 +11,7 @@ import {
 const require = createRequire(
   new URL("../packages/core/package.json", import.meta.url),
 );
+const { OneFactor, OneMinusSrcAlphaFactor } = require("three");
 const threeUrl = new URL(
   "../build/three.module.js",
   pathToFileURL(require.resolve("three")),
@@ -34,7 +35,9 @@ const result = await build({
           constructor() { this.domElement = document.createElement("canvas"); this.ratio = 1; }
           setPixelRatio(value) { this.ratio = value; }
           getPixelRatio() { return this.ratio; }
-          setSize() {} setClearColor() {} dispose() {} forceContextLoss() {}
+          setSize(width, height) { this.size = [width, height]; }
+          getDrawingBufferSize(target) { return target.set(...this.size).multiplyScalar(this.ratio).floor(); } setClearColor(color, alpha) { this.clearAlpha = alpha; }
+          render() {} dispose() {} forceContextLoss() {}
         }`;
       },
     },
@@ -55,11 +58,25 @@ const { GatherformPlayer } = await import(
 );
 
 test("saved Trails and overlay settings initialize, toggle and dispose without missing geometry", (context) => {
+  const labels = [];
   class Canvas extends EventTarget {
     style = {};
     setAttribute() {}
     getContext() {
-      return { setTransform() {} };
+      return {
+        setTransform() {},
+        clearRect() {
+          labels.length = 0;
+        },
+        beginPath() {},
+        moveTo() {},
+        lineTo() {},
+        stroke() {},
+        strokeRect() {},
+        fillText(text) {
+          labels.push(text);
+        },
+      };
     }
     remove() {}
   }
@@ -116,7 +133,40 @@ test("saved Trails and overlay settings initialize, toggle and dispose without m
     };
     try {
       const player = new GatherformPlayer(host, scene);
-      player.update({ settings: { trails: !trails } });
+      assert.equal(player.material.blendSrcAlpha, OneFactor);
+      assert.equal(player.material.blendDstAlpha, OneMinusSrcAlphaFactor);
+      player.draw(100);
+      assert.ok(labels.some((label) => label.includes("LOGO")));
+      assert.equal(player.renderer.clearAlpha, 1);
+      assert.deepEqual(
+        player.material.uniforms.viewportPixels.value.toArray(),
+        [600, 400],
+      );
+      assert.equal(player.material.uniforms.fadeEdges.value, true);
+
+      player.update({
+        settings: { background: "transparent", paper: "light" },
+      });
+      assert.equal(player.geometry.instanceCount, 1);
+      player.update({
+        settings: { density: 8, background: "transparent", paper: "light" },
+      });
+      assert.equal(player.geometry.instanceCount, 8);
+      player.scatter();
+      player.draw(117);
+      assert.equal(player.renderer.clearAlpha, 0);
+      assert.equal(player.trailMaterial.blendSrc, OneFactor);
+      assert.equal(
+        labels.some((label) => label.includes("LOGO")),
+        false,
+      );
+
+      player.gather();
+      for (let time = 134; time <= 5000; time += 17) player.draw(time);
+      assert.ok(labels.some((label) => label.includes("LOGO")));
+      player.update({ settings: { trails: !trails, fadeEdges: false } });
+      player.draw(5017);
+      assert.equal(player.material.uniforms.fadeEdges.value, false);
       player.update({ settings: { trails } });
       player.dispose();
     } catch (error) {

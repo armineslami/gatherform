@@ -18,6 +18,8 @@ export const particleVertexShader = /* glsl */ `
   uniform float pointSize;
   uniform float pixelRatio;
   uniform float grainScale;
+  uniform float minimumGrainPixels;
+  uniform vec2 depthBounds;
   uniform float pointerStrength;
   uniform float pointerRadius;
   uniform float audioLevel;
@@ -34,6 +36,8 @@ export const particleVertexShader = /* glsl */ `
   varying vec4 particleColor;
   varying float fading;
   varying float grainBrightness;
+  varying float grainCoverage;
+  varying float nearness;
   varying float trailOpacity;
 
   vec3 randomDirection(float seed) {
@@ -43,7 +47,7 @@ export const particleVertexShader = /* glsl */ `
   }
 
   void main() {
-    vec3 random = randomDirection(pointSeed);
+    vec3 random = randomDirection(pointSeed + float(gl_InstanceID) * 0.371);
     vec3 direction = random * 2.0 - 1.0;
     grainBrightness = 0.75 + random.y * 0.25;
 
@@ -65,6 +69,8 @@ export const particleVertexShader = /* glsl */ `
 
     }
 
+    // Extra grains share the source color and sit just around the prepared surface.
+    if (gl_InstanceID > 0) home.xy += direction.xy * 0.003;
     vec2 normal = driftLine.xz;
     vec2 tangent = vec2(-normal.y, normal.x);
     float side = (dot(home.xy, normal) - driftLine.y) * driftSide;
@@ -97,6 +103,8 @@ export const particleVertexShader = /* glsl */ `
       color.rgb = mix(color.rgb, lightColor, scanBand * 0.85);
     }
     particleColor = color;
+    // Prepared depth from back (0) to front (1), read before motion so drifting grains keep their shade.
+    nearness = clamp((mix(position.z, targetPosition.z, blend) - depthBounds.x) / max(0.0001, depthBounds.y - depthBounds.x), 0.0, 1.0);
     // Hide a departing point before its lifetime wraps back to its image position.
     float lifetimeOpacity = 1.0 - smoothstep(0.6, 1.0, departure);
     fading = mix(1.0, lifetimeOpacity, affected * step(0.0001, driftStrength));
@@ -117,44 +125,55 @@ export const particleVertexShader = /* glsl */ `
         }
       }
     }
-    gl_PointSize = clamp(pointSize * (1.0 + scanBand * 0.7) * (0.7 + random.z * 0.8) * pixelRatio * grainScale * (3.4 / max(0.5, -viewPosition.z)), 0.5, 12.0);
+    float diameter = pointSize * (1.0 + scanBand * 0.7) * (0.7 + random.z * 0.8) * pixelRatio * grainScale * (3.4 / max(0.5, -viewPosition.z));
+    // A grain below the minimum would snap between pixels as it moves and flicker.
+    // Draw it at the minimum instead, with its ink scaled to the area it really covers.
+    gl_PointSize = clamp(diameter, minimumGrainPixels, 12.0);
+    grainCoverage = min(1.0, diameter * diameter / (minimumGrainPixels * minimumGrainPixels));
   }
 `;
 
 export const particleFragmentShader = /* glsl */ `
   uniform float opacity;
   uniform float lightPaper;
-  uniform float depthPass;
+  uniform float transparentBackground;
+  uniform bool fadeEdges;
+  uniform vec2 viewportPixels;
   uniform float trailPass;
   varying vec4 particleColor;
   varying float fading;
   varying float grainBrightness;
+  varying float grainCoverage;
+  varying float nearness;
   varying float trailOpacity;
+
+  float canvasOpacity() {
+    if (!fadeEdges) return 1.0;
+    // Use the fragment position so long trails also disappear before reaching any edge.
+    vec2 position = gl_FragCoord.xy / viewportPixels;
+    vec2 edgeDistance = min(position, 1.0 - position);
+    vec2 feather = smoothstep(vec2(0.015), vec2(0.21), edgeDistance);
+    return feather.x * feather.y;
+  }
 
   void main() {
     if (trailPass > 0.5) {
-      float alpha = particleColor.a * opacity * fading * trailOpacity * 0.5;
+      float alpha = particleColor.a * opacity * fading * trailOpacity * 0.5 * canvasOpacity();
       vec3 ink = particleColor.rgb * alpha;
-      gl_FragColor = vec4(mix(ink, vec3(1.0) - ink, lightPaper), alpha);
+      gl_FragColor = vec4(mix(ink, vec3(mix(1.0, alpha, transparentBackground)) - ink, lightPaper), alpha);
       return;
     }
     float radius = length(gl_PointCoord - 0.5);
     if (radius > 0.5) discard;
-    float softGrain = exp(-radius * radius * 18.0);
-    float edge = softGrain * (1.0 - smoothstep(0.4, 0.5, radius));
-    float coverage = particleColor.a * opacity * fading * edge;
-    // Only the solid part of a visible grain blocks the layers behind it.
-    if (depthPass > 0.5) {
-      if (coverage < 0.35) discard;
-      gl_FragColor = vec4(0.0);
-      return;
-    }
-    if (coverage < 0.001) discard;
-    // Each grain keeps a soft profile and a small brightness variation, without changing hue.
-    float roundedGrain = 0.85 + 0.15 * softGrain;
-    coverage = smoothstep(0.0, 0.35, coverage);
-    vec3 grain = particleColor.rgb * grainBrightness * roundedGrain * coverage;
-    gl_FragColor = vec4(mix(grain, vec3(1.0) - grain, lightPaper), coverage);
+    // A firm disc with a narrow soft rim reads as a solid grain, not a blur.
+    float edge = 1.0 - smoothstep(0.3, 0.5, radius);
+    // Nearer grains carry more ink, so relief reads without turning the picture.
+    float shade = mix(0.7, 1.3, nearness);
+    float coverage = min(1.0, particleColor.a * opacity * fading * edge * grainCoverage * shade) * canvasOpacity();
+    if (coverage < 0.002) discard;
+    // Each grain keeps a small brightness variation without changing hue.
+    vec3 grain = particleColor.rgb * grainBrightness * coverage;
+    gl_FragColor = vec4(mix(grain, vec3(mix(1.0, coverage, transparentBackground)) - grain, lightPaper), coverage);
     // Source point colors are already display RGB. Converting them again washes out dark regions.
   }
 `;

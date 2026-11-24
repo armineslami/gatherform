@@ -156,3 +156,46 @@ test("drift speed preserves old scene playback and validates its multiplier", ()
   for (const driftSpeed of [-1, 3.1, NaN, Infinity])
     assert.throws(() => validateSettings({ driftSpeed }));
 });
+
+test("transparent backgrounds survive scene export and reject other color keywords", () => {
+  const scene = createScene();
+  scene.settings.background = "transparent";
+  assert.equal(
+    decodeScene(encodeScene(scene)).settings.background,
+    "transparent",
+  );
+  assert.equal(
+    validateSettings({ background: "transparent", paper: "light" }).background,
+    "transparent",
+  );
+  assert.throws(
+    () => validateSettings({ lightColor: "transparent" }),
+    /Invalid lightColor/,
+  );
+  assert.throws(
+    () => validateSettings({ background: "red" }),
+    /Invalid background/,
+  );
+});
+
+test("framing and scattered-start settings default safely and stay bounded", () => {
+  // Scenes saved before these settings existed keep their earlier look.
+  const older = validateSettings({});
+  assert.equal(older.frameScale, 1);
+  assert.equal(older.startScattered, false);
+
+  const intro = validateSettings({
+    startScattered: true,
+    gatherDelay: 2.5,
+    frameScale: 1.4,
+  });
+  assert.deepEqual(
+    [intro.startScattered, intro.gatherDelay, intro.frameScale],
+    [true, 2.5, 1.4],
+  );
+  for (const frameScale of [0.4, 2.1, NaN])
+    assert.throws(() => validateSettings({ frameScale }));
+  for (const gatherDelay of [-0.1, 10.1, Infinity])
+    assert.throws(() => validateSettings({ gatherDelay }));
+  assert.throws(() => validateSettings({ startScattered: "yes" }));
+});

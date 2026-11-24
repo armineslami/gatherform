@@ -28,6 +28,7 @@ function fixture() {
 test("compact files preserve metadata, point budget and source colors with bounded position error", async () => {
   const source = fixture();
   source.settings.driftSpeed = 0.5;
+  source.settings.density = 8;
   const encoded = await encodeCompactScene(source);
   const decoded = await decodeSceneFile(encoded);
   assert.equal(
@@ -59,7 +60,7 @@ test("compact export rejects geometry outside its surface frame", async () => {
   await assert.rejects(encodeCompactScene(scene), /full-detail export/);
 });
 test("gzip expansion has a fixed upper limit", async () => {
-  const stream = new Blob([new Uint8Array(600000)])
+  const stream = new Blob([new Uint8Array(900000)])
     .stream()
     .pipeThrough(new CompressionStream("gzip"));
   await assert.rejects(
@@ -103,6 +104,23 @@ test("all overlay combinations preserve appearance and interactions in both form
         `overlay mask ${mask}`,
       );
     }
+  }
+});
+
+test("compact cutouts preserve contrasting colors within the same patch", async () => {
+  // AI depth on a two-tone logo must not fall back to one surface of gray squares.
+  for (const depthSource of ["procedural", "ai"]) {
+    const source = fixture();
+    source.clouds[0] = {
+      name: "Two-tone diagonal",
+      depthSource,
+      positions: new Float32Array([-0.001, 0.024, 0, -0.02, 0.004, 0]),
+      colors: new Uint8Array([32, 32, 32, 255, 255, 255, 255, 255]),
+    };
+    const encoded = await encodeCompactScene(source);
+    const decoded = await decodeSceneFile(encoded);
+    assert.deepEqual(decoded.clouds[0].colors, source.clouds[0].colors);
+    assert.deepEqual(await encodeCompactScene(decoded), encoded);
   }
 });
 

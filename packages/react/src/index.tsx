@@ -1,11 +1,14 @@
 "use client";
 
 import {
+  createElement,
   forwardRef,
+  isValidElement,
   useEffect,
   useImperativeHandle,
   useRef,
   useState,
+  type ComponentType,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -17,6 +20,9 @@ import {
   type Settings,
 } from "@armin-eslami/gatherform-core";
 
+// Let hosts start a scene download early without importing the core package.
+export { preloadScene } from "@armin-eslami/gatherform-core";
+
 export interface GatherformHandle {
   scatter(): void;
   gather(): void;
@@ -24,6 +30,8 @@ export interface GatherformHandle {
   light(): void;
   transitionTo(imageIndex: number): void;
   resetCamera(): void;
+  /** Scatter at once, then gather after the scene's gatherDelay. */
+  replayIntro(): void;
   zoomBy(factor: number): void;
   setAudioLevel(level: number): void;
 }
@@ -39,6 +47,11 @@ interface SharedProps {
   className?: string;
   style?: CSSProperties;
   label?: string;
+  /**
+   * Shown while the scene downloads and decodes, for example a static logo image.
+   * Accepts an element (`<Loader />`) or a component without required props (`Loader`).
+   */
+  placeholder?: ReactNode | ComponentType;
   fallback?: ReactNode;
   onReady?: () => void;
   onError?: (error: Error) => void;
@@ -64,6 +77,8 @@ export const Gatherform = forwardRef<GatherformHandle, GatherformProps>(
 
     const [error, setError] = useState<Error | null>(null);
 
+    const [ready, setReady] = useState(false);
+
     // ---------------------------------------------------------
     // Public controls
     // ---------------------------------------------------------
@@ -78,6 +93,7 @@ export const Gatherform = forwardRef<GatherformHandle, GatherformProps>(
         transitionTo: (imageIndex) =>
           playerRef.current?.transitionTo(imageIndex),
         resetCamera: () => playerRef.current?.resetCamera(),
+        replayIntro: () => playerRef.current?.replayIntro(),
         zoomBy: (factor) => playerRef.current?.zoomBy(factor),
         setAudioLevel: (level) => playerRef.current?.setAudioLevel(level),
       }),
@@ -99,6 +115,7 @@ export const Gatherform = forwardRef<GatherformHandle, GatherformProps>(
       const controller = new AbortController();
       let player: GatherformPlayer | null = null;
       setError(null);
+      setReady(false);
 
       const showError = (cause: unknown) => {
         if (controller.signal.aborted) return;
@@ -131,6 +148,7 @@ export const Gatherform = forwardRef<GatherformHandle, GatherformProps>(
           });
           player.setAudioLevel(current.audioLevel ?? 0);
           playerRef.current = player;
+          setReady(true);
           current.onReady?.();
         } catch (cause) {
           showError(cause);
@@ -208,8 +226,27 @@ export const Gatherform = forwardRef<GatherformHandle, GatherformProps>(
           ref={hostRef}
           style={{ position: "absolute", inset: 0, overflow: "hidden" }}
         />
+        {!ready && !error && renderPlaceholder(props.placeholder)}
         {error && <div role="alert">{props.fallback ?? error.message}</div>}
       </div>
     );
   },
 );
+
+/** Render a placeholder given as an element or as a component type. */
+function renderPlaceholder(
+  placeholder: ReactNode | ComponentType | undefined,
+): ReactNode {
+  // Plain function and class components are functions; memo and forwardRef
+  // components are objects tagged by React, unlike elements, arrays and text.
+  const isComponent =
+    typeof placeholder === "function" ||
+    (typeof placeholder === "object" &&
+      placeholder !== null &&
+      !Array.isArray(placeholder) &&
+      !isValidElement(placeholder) &&
+      "$$typeof" in placeholder);
+  return isComponent
+    ? createElement(placeholder as ComponentType)
+    : (placeholder as ReactNode);
+}

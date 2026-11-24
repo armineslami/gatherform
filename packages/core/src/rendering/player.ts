@@ -36,12 +36,13 @@ export class GatherformPlayer {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
   private readonly group = new THREE.Group();
-  private readonly geometry = new THREE.BufferGeometry();
+  private readonly geometry = new THREE.InstancedBufferGeometry();
   private readonly material: THREE.ShaderMaterial;
-  private readonly depthMaterial: THREE.ShaderMaterial;
   private readonly trailMaterial: THREE.ShaderMaterial;
   private trailLines: THREE.LineSegments | null = null;
   private readonly cloudCenters: THREE.Vector3[];
+  /** Each cloud's prepared z range (minimum, maximum), used to shade grains by nearness. */
+  private readonly cloudDepthBounds: THREE.Vector2[];
   private readonly overlay = document.createElement("canvas");
   private readonly overlayContext: CanvasRenderingContext2D;
   private readonly resizeObserver: ResizeObserver;
@@ -61,6 +62,8 @@ export class GatherformPlayer {
   private transitioning = false;
   private scatterAmount = 0;
   private scatterTarget = 0;
+  /** Animation time at which a scattered start gathers; null once handled or not requested. */
+  private introGatherSeconds: number | null = null;
   private lightStartSeconds = -10;
   private lightPulseActive = false;
   private animationFrame = 0;
@@ -88,6 +91,7 @@ export class GatherformPlayer {
   private width = 1;
   private height = 1;
   private audioLevel = 0;
+  private frameMarksVisible = false;
   private lastOverlaySeconds = -1;
   private readonly pointerNormalized = new THREE.Vector2();
   private readonly overlayPoint = new THREE.Vector3();
@@ -96,6 +100,7 @@ export class GatherformPlayer {
     { length: 28 },
     () => new THREE.Vector3(),
   );
+  private grainDensityScale = 1;
   private pointCountLabel = "";
   private particleSeeds: Float32Array | null = null;
   private options: PlayerOptions;
@@ -126,10 +131,16 @@ export class GatherformPlayer {
       ...options.interactions,
     });
     // Compute a fixed pivot once, before drift or pointer movement changes the display.
-    this.cloudCenters = data.clouds.map((cloud) =>
-      new THREE.Box3()
-        .setFromBufferAttribute(new THREE.BufferAttribute(cloud.positions, 3))
-        .getCenter(new THREE.Vector3()),
+    const cloudBounds = data.clouds.map((cloud) =>
+      new THREE.Box3().setFromBufferAttribute(
+        new THREE.BufferAttribute(cloud.positions, 3),
+      ),
+    );
+    this.cloudCenters = cloudBounds.map((bounds) =>
+      bounds.getCenter(new THREE.Vector3()),
+    );
+    this.cloudDepthBounds = cloudBounds.map(
+      (bounds) => new THREE.Vector2(bounds.min.z, bounds.max.z),
     );
     this.activeImage = data.activeImage;
     this.previousImage = data.activeImage;
@@ -142,7 +153,7 @@ export class GatherformPlayer {
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(
-      Math.min(devicePixelRatio, options.maxPixelRatio ?? 1.5),
+      Math.min(devicePixelRatio, options.maxPixelRatio ?? 2),
     );
     this.renderer.setClearColor(0, 0);
     this.renderer.domElement.style.cssText =
@@ -161,15 +172,17 @@ export class GatherformPlayer {
       vertexShader: particleVertexShader,
       fragmentShader: particleFragmentShader,
       transparent: true,
+      // Grains blend without occluding each other. A depth test made grains pop in
+      // and out as the picture swayed, and dense same-color ink needs no sorting.
       depthWrite: false,
-      depthTest: true,
+      depthTest: false,
       blending: THREE.CustomBlending,
       blendSrc: THREE.OneFactor,
       blendDst: THREE.OneMinusSrcAlphaFactor,
-      blendSrcAlpha: THREE.ZeroFactor,
-      blendDstAlpha: THREE.OneFactor,
+      // Accumulate grain coverage so a transparent canvas remains visible over the host page.
+      blendSrcAlpha: THREE.OneFactor,
+      blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
       uniforms: {
-        depthPass: { value: 0 },
         trailPass: { value: 0 },
         scanPlane: { value: new THREE.Vector2(0, 0) },
         elapsedSeconds: { value: 0 },
@@ -183,8 +196,13 @@ export class GatherformPlayer {
         pointSize: { value: 1 },
         pixelRatio: { value: this.renderer.getPixelRatio() },
         grainScale: { value: 1 },
+        minimumGrainPixels: { value: 1.5 },
+        depthBounds: { value: this.cloudDepthBounds[this.activeImage] },
         opacity: { value: 1 },
         lightPaper: { value: 0 },
+        transparentBackground: { value: 0 },
+        fadeEdges: { value: true },
+        viewportPixels: { value: new THREE.Vector2(1, 1) },
         pointerStrength: { value: 0 },
         pointerRadius: { value: 0.2 },
         pointerWakes: { value: this.pointerWakes },
@@ -207,20 +225,9 @@ export class GatherformPlayer {
       trailPass: { value: 1 },
     };
     this.setCloudAttributes(this.activeImage, this.activeImage);
-    // Share point buffers and motion uniforms; the first pass only records solid grain depth.
-    this.depthMaterial = this.material.clone();
-    this.depthMaterial.uniforms = {
-      ...this.material.uniforms,
-      depthPass: { value: 1 },
-    };
-    this.depthMaterial.transparent = false;
-    this.depthMaterial.depthWrite = true;
-    this.depthMaterial.colorWrite = false;
-    this.depthMaterial.blending = THREE.NoBlending;
-    const depthPoints = new THREE.Points(this.geometry, this.depthMaterial);
     const colorPoints = new THREE.Points(this.geometry, this.material);
     colorPoints.renderOrder = 1;
-    this.group.add(depthPoints, colorPoints);
+    this.group.add(colorPoints);
     this.scene.add(this.group);
     this.host.append(this.renderer.domElement, this.overlay);
 
@@ -269,6 +276,13 @@ export class GatherformPlayer {
     });
     this.intersectionObserver.observe(host);
     this.update(options);
+    // Reduced motion shows the finished shape at once.
+    if (this.settings.startScattered && !this.motionPreference.matches) {
+      this.scatterAmount = 1;
+      this.introGatherSeconds = null;
+      this.scatterTarget = 1;
+      this.introGatherSeconds = this.settings.gatherDelay;
+    }
     this.resize();
   }
 
@@ -299,11 +313,12 @@ export class GatherformPlayer {
       ...this.data.interactions,
       ...options.interactions,
     });
+    this.geometry.instanceCount = this.settings.density;
     this.syncTrails();
     this.options = options;
     this.paused = options.paused ?? false;
     this.lastOverlaySeconds = -1;
-    const pixelRatio = Math.min(devicePixelRatio, options.maxPixelRatio ?? 1.5);
+    const pixelRatio = Math.min(devicePixelRatio, options.maxPixelRatio ?? 2);
     if (this.renderer.getPixelRatio() !== pixelRatio) {
       this.renderer.setPixelRatio(pixelRatio);
       this.material.uniforms.pixelRatio.value = pixelRatio;
@@ -349,6 +364,7 @@ export class GatherformPlayer {
   }
 
   gather(): void {
+    this.introGatherSeconds = null;
     this.scatterTarget = 0;
     this.requestFrame();
   }
@@ -389,6 +405,15 @@ export class GatherformPlayer {
     this.requestFrame();
   }
 
+  /** Scatter at once and gather after the scene's gatherDelay, as a scattered start does. */
+  replayIntro(): void {
+    if (this.motionPreference.matches) return;
+    this.scatterAmount = 1;
+    this.scatterTarget = 1;
+    this.introGatherSeconds = this.clockSeconds + this.settings.gatherDelay;
+    this.requestFrame();
+  }
+
   resetCamera(): void {
     this.rotationTarget.set(0, 0);
     this.group.position.set(0, 0, 0);
@@ -407,7 +432,6 @@ export class GatherformPlayer {
     this.intersectionObserver.disconnect();
     this.geometry.dispose();
     this.material.dispose();
-    this.depthMaterial.dispose();
     this.trailMaterial.dispose();
     this.trailLines?.geometry.dispose();
     this.renderer.dispose();
@@ -425,7 +449,10 @@ export class GatherformPlayer {
     const to = this.data.clouds[toIndex];
     this.material.uniforms.sourceCenter.value = this.cloudCenters[fromIndex];
     this.material.uniforms.targetCenter.value = this.cloudCenters[toIndex];
+    this.material.uniforms.depthBounds.value = this.cloudDepthBounds[toIndex];
     const count = from.positions.length / 3;
+    // Quadrupling the grain count needs half the diameter for the same surface coverage.
+    this.grainDensityScale = Math.min(2, Math.sqrt(524288 / count));
     this.pointCountLabel = `${count.toLocaleString()} PTS`;
     const seeds = (this.particleSeeds ??= createParticleSeeds(count));
 
@@ -606,6 +633,9 @@ export class GatherformPlayer {
     this.width = Math.max(1, this.host.clientWidth);
     this.height = Math.max(1, this.host.clientHeight);
     this.renderer.setSize(this.width, this.height, false);
+    this.renderer.getDrawingBufferSize(
+      this.material.uniforms.viewportPixels.value,
+    );
     const overlayPixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     this.overlay.width = Math.round(this.width * overlayPixelRatio);
     this.overlay.height = Math.round(this.height * overlayPixelRatio);
@@ -665,6 +695,14 @@ export class GatherformPlayer {
     }
     // Limit camera easing after a slow frame while keeping animation clocks on elapsed time.
     const smoothingSeconds = Math.min(elapsedSeconds, 0.1);
+    if (
+      this.introGatherSeconds !== null &&
+      (this.clockSeconds >= this.introGatherSeconds ||
+        this.motionPreference.matches)
+    ) {
+      this.introGatherSeconds = null;
+      this.scatterTarget = 0;
+    }
     this.scatterAmount = still
       ? this.scatterTarget
       : THREE.MathUtils.damp(
@@ -714,8 +752,9 @@ export class GatherformPlayer {
       this.pointerVelocity.lengthSq() < 0.0001
     )
       this.pointer.set(100, 100);
-    if (this.camera.zoom !== this.zoom) {
-      this.camera.zoom = this.zoom;
+    const cameraZoom = this.zoom * this.settings.frameScale;
+    if (this.camera.zoom !== cameraZoom) {
+      this.camera.zoom = cameraZoom;
       this.camera.updateProjectionMatrix();
     }
     this.group.updateMatrixWorld();
@@ -734,15 +773,20 @@ export class GatherformPlayer {
     uniforms.pointSize.value = this.settings.pointSize;
     // Projection zoom changes positions, but WebGL point sprites need their own scale.
     uniforms.grainScale.value =
-      this.zoom * 1.2 * Math.max(0.75, Math.min(2, this.height / 720));
+      cameraZoom * 1.2 * (this.height / 720) * this.grainDensityScale;
     uniforms.opacity.value = this.settings.opacity;
     uniforms.lightPaper.value = this.settings.paper === "light" ? 1 : 0;
-    this.trailMaterial.blendSrc =
-      this.settings.paper === "light" ? THREE.ZeroFactor : THREE.OneFactor;
-    this.trailMaterial.blendDst =
-      this.settings.paper === "light"
-        ? THREE.SrcColorFactor
-        : THREE.OneMinusSrcAlphaFactor;
+    const transparentBackground = this.settings.background === "transparent";
+    uniforms.transparentBackground.value = transparentBackground ? 1 : 0;
+    uniforms.fadeEdges.value = this.settings.fadeEdges;
+    const opaqueLightPaper =
+      this.settings.paper === "light" && !transparentBackground;
+    this.trailMaterial.blendSrc = opaqueLightPaper
+      ? THREE.ZeroFactor
+      : THREE.OneFactor;
+    this.trailMaterial.blendDst = opaqueLightPaper
+      ? THREE.SrcColorFactor
+      : THREE.OneMinusSrcAlphaFactor;
     if (this.trailLines)
       this.trailLines.visible = this.settings.trails && this.settings.drift > 0;
     const scanPhase = (this.clockSeconds % 8) / 8;
@@ -787,16 +831,27 @@ export class GatherformPlayer {
           ? 2
           : 0;
     this.renderer.setClearColor(
-      this.settings.paper === "light" ? "#f2f0e8" : this.settings.background,
-      1,
+      transparentBackground
+        ? 0
+        : this.settings.paper === "light"
+          ? "#f2f0e8"
+          : this.settings.background,
+      transparentBackground ? 0 : 1,
     );
     this.renderer.render(this.scene, this.camera);
+    const showFrameMarks =
+      this.settings.marks &&
+      !this.transitioning &&
+      this.scatterTarget === 0 &&
+      this.scatterAmount <= 0.001;
     if (
+      showFrameMarks !== this.frameMarksVisible ||
       this.lastOverlaySeconds < 0 ||
       this.clockSeconds - this.lastOverlaySeconds >= 1 / 15 ||
       still
     ) {
-      this.drawOverlay(progress);
+      this.drawOverlay(progress, showFrameMarks);
+      this.frameMarksVisible = showFrameMarks;
       this.lastOverlaySeconds = this.clockSeconds;
     }
 
@@ -810,6 +865,7 @@ export class GatherformPlayer {
       this.settings.scan ||
       this.transitioning ||
       Math.abs(this.scatterAmount - this.scatterTarget) > 0.001 ||
+      this.introGatherSeconds !== null ||
       this.clockSeconds - this.lightStartSeconds < 2 ||
       this.audioLevel > 0 ||
       this.pointerVelocity.lengthSq() > 0.0001;
@@ -817,7 +873,7 @@ export class GatherformPlayer {
     else this.lastFrameMilliseconds = 0;
   };
 
-  private drawOverlay(progress: number): void {
+  private drawOverlay(progress: number, showFrameMarks: boolean): void {
     const context = this.overlayContext;
     context.clearRect(0, 0, this.width, this.height);
     const foreground =
@@ -827,7 +883,7 @@ export class GatherformPlayer {
     context.font = "11px ui-monospace, monospace";
     context.lineWidth = 0.6;
 
-    if (this.settings.marks) {
+    if (showFrameMarks) {
       const corners = [
         [-1.25, 1.15],
         [1.25, 1.15],

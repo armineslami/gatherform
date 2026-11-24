@@ -12,6 +12,8 @@ export function SceneControls({
   interactions,
   onSettings,
   onInteractions,
+  previewPageColor,
+  onPreviewPageColor,
   t,
 }: {
   locale: "en" | "fa";
@@ -19,6 +21,9 @@ export function SceneControls({
   interactions: Interactions;
   onSettings: (patch: Partial<Settings>) => void;
   onInteractions: (patch: Partial<Interactions>) => void;
+  /** Studio-only stand-in for the host page behind a transparent scene; never exported. */
+  previewPageColor: string;
+  onPreviewPageColor: (color: string) => void;
   t: typeof en;
 }) {
   return (
@@ -39,6 +44,15 @@ export function SceneControls({
           max={6}
           step={0.05}
           onChange={(pointSize) => onSettings({ pointSize })}
+        />
+        <RangeControl
+          locale={locale}
+          label={t.density}
+          value={settings.density}
+          min={1}
+          max={8}
+          step={1}
+          onChange={(density) => onSettings({ density })}
         />
         <RangeControl
           locale={locale}
@@ -89,13 +103,58 @@ export function SceneControls({
           />
         </label>
         <label className="select-control">
-          {t.background}
+          {settings.background === "transparent"
+            ? t.previewPageColor
+            : t.background}
           <input
             type="color"
-            value={settings.background}
-            onChange={(event) => onSettings({ background: event.target.value })}
+            value={
+              settings.background === "transparent"
+                ? previewPageColor
+                : settings.background
+            }
+            onChange={(event) =>
+              settings.background === "transparent"
+                ? onPreviewPageColor(event.target.value)
+                : onSettings({ background: event.target.value })
+            }
           />
         </label>
+        <ToggleControl
+          label={t.transparentBackground}
+          checked={settings.background === "transparent"}
+          onChange={(transparent) =>
+            onSettings({ background: transparent ? "transparent" : "#090b0d" })
+          }
+        />
+        <ToggleControl
+          label={t.fadeEdges}
+          checked={settings.fadeEdges}
+          onChange={(fadeEdges) => onSettings({ fadeEdges })}
+        />
+        <RangeControl
+          locale={locale}
+          label={t.frameScale}
+          value={settings.frameScale}
+          min={0.5}
+          max={2}
+          step={0.05}
+          onChange={(frameScale) => onSettings({ frameScale })}
+        />
+        <ToggleControl
+          label={t.startScattered}
+          checked={settings.startScattered}
+          onChange={(startScattered) => onSettings({ startScattered })}
+        />
+        <RangeControl
+          locale={locale}
+          label={t.gatherDelay}
+          value={settings.gatherDelay}
+          min={0}
+          max={10}
+          step={0.1}
+          onChange={(gatherDelay) => onSettings({ gatherDelay })}
+        />
       </ControlSection>
       <ControlSection label={t.motion}>
         <RangeControl
@@ -167,6 +226,7 @@ export function SceneControls({
             <option value="melt">{t.melt}</option>
           </select>
         </label>
+        <p className="help">{t.travelHint}</p>
       </ControlSection>
       <ControlSection label={t.overlays} open={false}>
         {(["track", "links", "scan", "trails", "marks", "dense"] as const).map(
